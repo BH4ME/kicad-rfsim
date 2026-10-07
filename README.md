@@ -38,7 +38,12 @@ RFSIM_INSTALL_OPENEMS=source scripts/install_macos.sh
 The source build uses the upstream `update_openEMS.sh --disable-GUI --python`
 workflow (the RFsim plugin does not need the optional AppCSXCAD GUI) and
 installs under `~/.local/share/rfsim/openEMS`. It may take a while and requires
-Homebrew, Git and a working compiler. To only install/update the plugin and
+Homebrew, Git and a working compiler. The installer uses a temporary HTTP/1.1
+curl setting for Homebrew downloads unless you already set `HOMEBREW_CURLRC`.
+If the default GHCR host is slow on your network, set
+`HOMEBREW_BOTTLE_DOMAIN` to a reachable Homebrew bottle mirror before running
+the installer.
+To only install/update the plugin and
 Python GUI packages, use `RFSIM_INSTALL_OPENEMS=none` (the default). You can
 also use an existing solver with:
 

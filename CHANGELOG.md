@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1 - 2026-10-07
+
+- Make Homebrew dependency downloads use a temporary HTTP/1.1 curl setting
+  when no user setting is present, avoiding intermittent GHCR HTTP/2 resets.
+
 ## 1.3.0 - 2026-10-07
 
 - Add macOS support for KiCad 10 on Intel and Apple Silicon.

@@ -3,7 +3,7 @@
 ## Session: 2026-10-07
 
 ### Phase 1: Requirements & Discovery
-- **Status:** in_progress
+- **Status:** complete
 - **Started:** 2026-10-07 19:38 Asia/Shanghai
 - Actions taken:
   - 检查了当前 `autopcb` 工作区，确认无现有提交，决定使用独立子目录。
@@ -45,7 +45,7 @@
   - `tests/test_solverenv_platform.py`, `tests/test_release_metadata.py`, `tests/test_scripts.py`
 
 ### Phase 4: Testing & Verification
-- **Status:** in_progress
+- **Status:** complete
 - Actions taken:
   - 在本机执行 macOS installer dry-run，成功复制插件并输出 `RFsim 1.3.0`。
   - 用 KiCad 10.0.3 bundled Python 3.9.13 运行 `plugins/board_reader.py` self-test：parser、stackup、geometry、package 全部通过。
@@ -57,33 +57,40 @@
   - 重新检查上游发布资产：官方 release 仍只有 Windows ZIP；macOS 只能走源码构建或第三方 Homebrew tap。
   - 当前 macOS Homebrew 依赖安装已重新启动；hdf5、CGAL、VTK、GCC 下载因 GHCR 的 HTTP/2 `PROTOCOL_ERROR` 中断，真实 FDTD 仍待依赖安装和源码构建完成。
   - README 发布说明改为明确 Apple Silicon 已验证；Intel 仅说明代码路径可复用，需自行编译对应架构的 solver。
+  - 使用 Homebrew bottle 镜像安装 hdf5、CGAL、VTK、GCC、Python 3.14、Cython、NumPy 和 Matplotlib，依赖检查通过。
+  - 通过 HTTP/1.1 预取 TinyXML 补丁，并完成 openEMS v0.37.0/CSXCAD v0.7.0 的 Apple Silicon 原生编译和 Python 3.14 扩展安装。
+  - `scripts/diagnose_macos.py` 通过：numpy、h5py、CSXCAD、openEMS 全部导入，`series_rlc_api` 为 true。
+  - KiCad Python 3.9 执行 `validation/run_headless.py coarse`：S11 max -11.0 dB、S21 min -0.2 dB，PASS；执行 `validation/run_rlc.py coarse`，R1/L1/C1 全部 PASS。
+  - openEMS solver Python 执行 `validation/test_ports.py`，包含真实 `LEtype=1` Series RLC XML 检查，PASS。
+  - `scripts/package_macos.sh` 生成 `dist/rfsim_v1.3.1_macos.zip`，包内无 `__pycache__` 或 `.pyc`。
 - Files created/modified:
   - `scripts/bump_version.py`, `scripts/package_macos.sh`
   - `README.md`, `metadata.json`, `plugins/solverenv.py`, `tests/test_solverenv_platform.py`, `scripts/diagnose_macos.py`
 
-### Phase 2: macOS 适配设计
-- **Status:** pending
+### Phase 5: Delivery
+- **Status:** complete
 - Actions taken:
-  -
-- Files created/modified:
-  -
+  - 更新到版本 `1.3.1`，完成 macOS 安装器下载稳定性修复。
+  - 生成 `dist/rfsim_v1.3.1_macos.zip`，确认包内无 `__pycache__` 或 `.pyc`。
+  - 完成单元测试、语法检查、版本一致性和 `git diff --check`。
+  - 提交并推送到 `BH4ME/kicad-rfsim`，创建 `v1.3.1` 标签和 GitHub Release。
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
 |------|-------|----------|--------|--------|
 | GitHub auth | `gh auth status` | `BH4ME` authenticated | Authenticated with repo scope | PASS |
 | Fork | `gh repo view BH4ME/kicad-rfsim` | Fork exists with main branch | Fork confirmed | PASS |
-| Source checkout | `git -C kicad-rfsim-macos status` | Clean main worktree | `main...origin/main` | PASS |
+| Source checkout | `git -C kicad-rfsim-macos status` | Clean main worktree | `main...origin/main` after delivery commit | PASS |
 | Python/unit tests | `python3 -m unittest discover -s tests -v` | All platform/release tests pass | 6 tests pass | PASS |
 | Platform/unit tests after Homebrew-path coverage | same | All platform/release tests pass | 8 tests pass | PASS |
 | Python syntax | `python3 -m py_compile ...` | No syntax errors | Pass | PASS |
 | Installer syntax | `bash -n scripts/install_macos.sh` | No shell syntax errors | Pass | PASS |
-| Installer dry-run | `RFSIM_SKIP_PYTHON_DEPS=1 RFSIM_INSTALL_OPENEMS=none scripts/install_macos.sh` | Copy plugin to target | Version 1.3.0 copied | PASS |
+| Installer dry-run | `RFSIM_SKIP_PYTHON_DEPS=1 RFSIM_INSTALL_OPENEMS=none scripts/install_macos.sh` | Copy plugin to target | Version 1.3.1 copied | PASS |
 | KiCad board reader | bundled KiCad Python `plugins/board_reader.py` | All self-tests pass | Parser/stackup/geometry/package pass | PASS |
 | KiCad settings dialog | bundled KiCad Python `validation/test_dialog.py` | GUI/settings tests pass | 26 tests pass | PASS |
 | Touchstone writer | bundled KiCad Python `validation/test_touchstone.py` | 1-5 port round trips pass | All pass | PASS |
-| openEMS FDTD | source build / `diagnose_macos.py` | native solver imports and LEtype | Homebrew GHCR downloads failed; no native solver yet | PENDING |
-| macOS KiCad/plugin/solver | pending | Plugin loads and runs | Not tested yet | PENDING |
+| openEMS FDTD | source build / `diagnose_macos.py` | native solver imports and LEtype | openEMS 0.37.0/CSXCAD 0.7.0 imports and LEtype pass | PASS |
+| macOS KiCad/plugin/solver | KiCad Python + headless validation | Plugin, solver and Touchstone chain | Headless S-parameter and R/L/C FDTD validation pass | PASS |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
@@ -97,8 +104,8 @@
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 1 complete in substance; planning files created; transitioning to Phase 2 |
-| Where am I going? | macOS runtime/solver adaptation, real KiCad verification, versioned fork release |
+| Where am I? | Phase 5 complete; macOS release delivered |
+| Where am I going? | Maintain the fork and upstream macOS changes when needed |
 | What's the goal? | See `task_plan.md`: complete macOS version of RFsim in `BH4ME/kicad-rfsim` |
-| What have I learned? | Official release is Windows-only; source already has some Unix-aware branches; openEMS packaging is the main uncertainty |
-| What have I done? | Forked, cloned, inspected source, and persisted findings |
+| What have I learned? | Official upstream release is Windows-only; a complete macOS build requires source-built openEMS/CSXCAD |
+| What have I done? | Forked, adapted, tested, packaged, tagged, and released the macOS version |

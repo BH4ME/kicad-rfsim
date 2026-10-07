@@ -10,6 +10,23 @@ PLUGIN_DIR="${KICAD_PLUGIN_DIR:-$HOME/Documents/KiCad/$KICAD_VERSION/scripting/p
 OPENEMS_PREFIX="${OPENEMS_PREFIX:-$HOME/.local/share/rfsim/openEMS}"
 OPENEMS_SOURCE="${OPENEMS_SOURCE:-$HOME/.cache/rfsim/openEMS-Project}"
 
+configure_homebrew_downloads() {
+  # GHCR and raw GitHub occasionally reset HTTP/2 streams on macOS.  Use
+  # temporary curl settings for this install only; respect a user's existing
+  # settings when they are already present.
+  if [[ -z "${CURL_HOME:-}" ]]; then
+    RFSIM_CURL_HOME="$(mktemp -d "${TMPDIR:-/tmp}/rfsim-curl-home.XXXXXX")"
+    printf '%s\n' '--http1.1' > "$RFSIM_CURL_HOME/.curlrc"
+    export CURL_HOME="$RFSIM_CURL_HOME"
+  fi
+  if [[ -z "${HOMEBREW_CURLRC:-}" ]]; then
+    RFSIM_HOMEBREW_CURLRC="$(mktemp "${TMPDIR:-/tmp}/rfsim-curlrc.XXXXXX")"
+    printf '%s\n' '--http1.1' > "$RFSIM_HOMEBREW_CURLRC"
+    export HOMEBREW_CURLRC="$RFSIM_HOMEBREW_CURLRC"
+  fi
+  trap 'rm -f "${RFSIM_HOMEBREW_CURLRC:-}"; rm -rf "${RFSIM_CURL_HOME:-}"' EXIT
+}
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "RFsim macOS installer must run on macOS." >&2
   exit 2
@@ -42,6 +59,7 @@ case "${RFSIM_INSTALL_OPENEMS:-none}" in
     ;;
   brew)
     command -v brew >/dev/null || { echo "Homebrew is required for brew mode." >&2; exit 2; }
+    configure_homebrew_downloads
     echo "Installing the third-party Homebrew openEMS formula."
     echo "The formula currently targets openEMS 0.0.36; inductors and Series RLC require v0.37+."
     brew tap vinn-ie/openems
@@ -50,6 +68,7 @@ case "${RFSIM_INSTALL_OPENEMS:-none}" in
   source)
     command -v git >/dev/null || { echo "git is required for source mode." >&2; exit 2; }
     command -v brew >/dev/null || { echo "Homebrew is required for source dependencies." >&2; exit 2; }
+    configure_homebrew_downloads
     mkdir -p "$(dirname "$OPENEMS_SOURCE")"
     if [[ ! -d "$OPENEMS_SOURCE/.git" ]]; then
       git clone --recursive https://github.com/thliebig/openEMS-Project.git "$OPENEMS_SOURCE"

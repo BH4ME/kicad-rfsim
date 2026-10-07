@@ -4,7 +4,7 @@
 把 NBalciunas/kicad-rfsim fork 到 BH4ME 账号，并将插件、openEMS 运行环境、安装说明、版本发布和测试流程完整适配到 macOS；每次变更遵循语义化版本号并保留可恢复的 Markdown 进度记录。
 
 ## Current Phase
-Phase 1: Requirements & Discovery
+Phase 5: Delivery (complete)
 
 ## Phases
 
@@ -29,17 +29,17 @@ Phase 1: Requirements & Discovery
 - **Status:** complete
 
 ### Phase 4: Testing & Verification
-- [ ] 运行 Python 单元/验证脚本
-- [ ] 在本机 KiCad 中验证插件加载和 GUI/solver 启动
-- [ ] 验证最小仿真和 Touchstone 输出
-- [ ] 检查 macOS 打包内容与版本号
-- **Status:** in_progress
+- [x] 运行 Python 单元/验证脚本
+- [x] 在本机 KiCad 中验证插件加载和 GUI/solver 启动
+- [x] 验证最小仿真和 Touchstone 输出
+- [x] 检查 macOS 打包内容与版本号
+- **Status:** complete
 
 ### Phase 5: Delivery
-- [ ] 提交到 fork
-- [ ] 创建 macOS 版本标签/Release（若具备完整验证）
-- [ ] 汇总安装方法、已验证范围和剩余限制
-- **Status:** pending
+- [x] 提交到 fork
+- [x] 创建 macOS 版本标签/Release（已验证）
+- [x] 汇总安装方法、已验证范围和剩余限制
+- **Status:** complete
 
 ## Key Questions
 1. 本机 KiCad 的版本、架构（Apple Silicon/Intel）和内置 Python 版本是什么？
