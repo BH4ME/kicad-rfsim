@@ -55,7 +55,7 @@
   - 构建 macOS package ZIP 并确认不包含 `__pycache__` 或 `.pyc`。
   - 克隆 openEMS upstream master（包含 v0.37.0-rc3 之后的 macOS 支持），开始执行无 GUI 的 Homebrew 依赖安装；当前仍在下载 gcc/hdf5 等依赖。
   - 重新检查上游发布资产：官方 release 仍只有 Windows ZIP；macOS 只能走源码构建或第三方 Homebrew tap。
-  - 当前 macOS Homebrew 依赖安装已重新启动，已成功进入 hdf5、CGAL、VTK、Python 组件下载阶段；真实 FDTD 仍待依赖安装和源码构建完成。
+  - 当前 macOS Homebrew 依赖安装已重新启动；hdf5、CGAL、VTK、GCC 下载因 GHCR 的 HTTP/2 `PROTOCOL_ERROR` 中断，真实 FDTD 仍待依赖安装和源码构建完成。
   - README 发布说明改为明确 Apple Silicon 已验证；Intel 仅说明代码路径可复用，需自行编译对应架构的 solver。
 - Files created/modified:
   - `scripts/bump_version.py`, `scripts/package_macos.sh`
@@ -82,7 +82,7 @@
 | KiCad board reader | bundled KiCad Python `plugins/board_reader.py` | All self-tests pass | Parser/stackup/geometry/package pass | PASS |
 | KiCad settings dialog | bundled KiCad Python `validation/test_dialog.py` | GUI/settings tests pass | 26 tests pass | PASS |
 | Touchstone writer | bundled KiCad Python `validation/test_touchstone.py` | 1-5 port round trips pass | All pass | PASS |
-| openEMS FDTD | source build / `diagnose_macos.py` | native solver imports and LEtype | Homebrew dependencies downloading; no native solver yet | PENDING |
+| openEMS FDTD | source build / `diagnose_macos.py` | native solver imports and LEtype | Homebrew GHCR downloads failed; no native solver yet | PENDING |
 | macOS KiCad/plugin/solver | pending | Plugin loads and runs | Not tested yet | PENDING |
 
 ## Error Log
