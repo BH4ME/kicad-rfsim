@@ -1509,7 +1509,10 @@ if __name__ == "__main__":  # self-test of the value parser: python board_reader
             ' (epsilon_r 4.5) (loss_tangent 0.02))'
             ' (layer "B.Cu" (type "copper") (thickness 0.035)))'
             + _EMPTY[_k:])
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as _dir:
+    # KiCad 10 bundles Python 3.9 on macOS, where TemporaryDirectory does
+    # not yet accept ``ignore_cleanup_errors``.  The temporary files here
+    # are closed before leaving the context, so the portable form is safe.
+    with tempfile.TemporaryDirectory() as _dir:
         _path = os.path.join(_dir, "board.kicad_pcb")
         _write(_path, _BRD)
         _brd = pcbnew.LoadBoard(_path)

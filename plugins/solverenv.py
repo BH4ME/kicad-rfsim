@@ -7,6 +7,8 @@ the two processes must agree about goes here.
 """
 import math
 import os
+import shutil
+import sys
 
 # The safety margin of the timestep rule for a lumped inductor. The largest
 # stable factor follows 1/sqrt(L[nH]). The bare law has no margin on the
@@ -252,18 +254,120 @@ def pml_depth(res):
     return PML_CELLS * res * (1.0 - 1e-6)
 
 
+def _platform_prefixes():
+    """Give package-manager prefixes that commonly contain openEMS.
+
+    Keep this discovery conservative: an explicit ``OPENEMS_PATH`` always
+    wins, while the standard Homebrew prefixes make a default Apple Silicon
+    install work without requiring the user to edit a config file.
+    """
+    if sys.platform == "darwin":
+        return ("/opt/homebrew/opt", "/usr/local/opt")
+    return ()
+
+
+def _normalise_path(path):
+    """Expand a user path and make it absolute without requiring it to exist."""
+    if not path:
+        return None
+    return os.path.abspath(os.path.expanduser(os.fspath(path)))
+
+
 def openems_dirs():
     """Give the possible openEMS install directories, the best one first.
 
     A directory in the list can be missing from the disk.
     """
     here = os.path.dirname(os.path.abspath(__file__))
-    return [d for d in (
-        os.environ.get("OPENEMS_PATH"),
-        # <kicad>/3rdparty/openEMS if the plugin is in .../plugins/rfsim
-        os.path.abspath(os.path.join(here, "..", "..", "openEMS")),
-        r"C:\openEMS",
-    ) if d]
+    candidates = []
+    explicit = _normalise_path(os.environ.get("OPENEMS_PATH"))
+    if explicit:
+        candidates.append(explicit)
+
+    # <kicad>/3rdparty/openEMS if the plugin is installed below KiCad.
+    candidates.append(os.path.abspath(os.path.join(here, "..", "..", "openEMS")))
+
+    # Homebrew's formulae are linked below these stable prefixes.  The
+    # solver may be installed by a third-party tap because openEMS does not
+    # publish official macOS binaries.
+    for prefix in _platform_prefixes():
+        candidates.append(os.path.join(prefix, "openems"))
+        candidates.append(os.path.join(prefix, "csxcad"))
+
+    # Keep the historical Windows default for existing users, but do not
+    # expose it as a meaningful candidate on Unix.
+    if os.name == "nt":
+        candidates.append(r"C:\openEMS")
+    else:
+        candidates.append(_normalise_path("~/openEMS"))
+        candidates.append(_normalise_path("~/.local/share/rfsim/openEMS"))
+
+    out = []
+    for path in candidates:
+        path = _normalise_path(path)
+        if path and path not in out:
+            out.append(path)
+    return out
+
+
+def runtime_env(openems_path=None):
+    """Return the subprocess environment needed by the solver.
+
+    macOS loads CSXCAD/openEMS as shared libraries.  The KiCad app may be
+    launched from Finder with a minimal environment, so the plugin must
+    explicitly pass the Homebrew or custom ``lib`` directories to the
+    solver subprocess.  The same function is harmless on Windows and Linux.
+    """
+    env = os.environ.copy()
+    explicit_root = _normalise_path(openems_path or env.get("OPENEMS_PATH"))
+    root = explicit_root
+    if not root:
+        root = next((d for d in openems_dirs() if os.path.isdir(d)), None)
+    if root:
+        env["OPENEMS_PATH"] = root
+        roots = [root]
+        if not env.get("CSXCAD_INSTALL_PATH"):
+            if explicit_root:
+                # A self-contained source build installs CSXCAD beside
+                # openEMS, so its root is a useful default.
+                env["CSXCAD_INSTALL_PATH"] = root
+            else:
+                for prefix in _platform_prefixes():
+                    candidate = os.path.join(prefix, "csxcad")
+                    if os.path.isdir(candidate):
+                        env["CSXCAD_INSTALL_PATH"] = candidate
+                        roots.append(candidate)
+                        break
+        if env.get("CSXCAD_INSTALL_PATH"):
+            csx_root = _normalise_path(env["CSXCAD_INSTALL_PATH"])
+            if csx_root and csx_root not in roots:
+                roots.append(csx_root)
+        if not env.get("OPENEMS_INSTALL_PATH"):
+            env["OPENEMS_INSTALL_PATH"] = root
+        bins = [os.path.join(item, "bin") for item in roots]
+        libs = [os.path.join(item, name) for item in roots
+                for name in ("lib", "lib64")]
+        if os.name == "nt":
+            env["PATH"] = os.pathsep.join(bins + [env.get("PATH", "")])
+        else:
+            env["PATH"] = os.pathsep.join(bins + [env.get("PATH", "")])
+            existing = env.get("DYLD_LIBRARY_PATH" if sys.platform == "darwin"
+                              else "LD_LIBRARY_PATH", "")
+            key = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+            env[key] = os.pathsep.join(libs + [existing])
+
+    # A user may put the Python extensions in a package-manager prefix while
+    # keeping the solver interpreter in a separate venv.  Let the extension
+    # loader honour its own environment variables as well.
+    for key in ("CSXCAD_INSTALL_PATH", "OPENEMS_INSTALL_PATH"):
+        value = _normalise_path(env.get(key))
+        if value:
+            env[key] = value
+            lib_dirs = [os.path.join(value, name) for name in ("lib", "lib64")]
+            key_path = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+            env[key_path] = os.pathsep.join(lib_dirs + [env.get(key_path, "")])
+            env["PATH"] = os.pathsep.join([os.path.join(value, "bin"), env.get("PATH", "")])
+    return env
 
 
 def solver_python():
@@ -281,13 +385,18 @@ def solver_python():
          for openEMS v0.0.36, which has a cp311 wheel but no lumped
          inductors.
     """
-    cfg = os.environ.get("RFSIM_PYTHON")
-    if cfg:
+    configured = os.environ.get("RFSIM_PYTHON")
+    cfg = _normalise_path(configured)
+    if configured and os.sep not in configured:
+        cfg = shutil.which(configured)
+    if cfg and os.path.isfile(cfg) and os.access(cfg, os.X_OK):
         return cfg
     for d in openems_dirs():
-        for sub in (("venv", "Scripts", "python.exe"),
-                    ("venv", "bin", "python")):
-            cand = os.path.join(d, *sub)
-            if os.path.isfile(cand):
+        subs = (("venv", "Scripts", "python.exe"),
+                ("venv", "bin", "python3"),
+                ("venv", "bin", "python"))
+        for sub in subs:
+            cand = _normalise_path(os.path.join(d, *sub))
+            if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
                 return cand
     return None

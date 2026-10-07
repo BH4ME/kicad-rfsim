@@ -3,6 +3,7 @@ pads with openEMS."""
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -15,36 +16,71 @@ NO_WINDOW = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW
 
 
 def _kicad_python():
-    """Give the python.exe of KiCad (sys.executable can be pcbnew.exe)."""
-    exe = sys.executable or ""
-    if os.path.basename(exe).lower().startswith("python") and os.path.isfile(exe):
-        return exe
-    for c in (os.path.join(os.path.dirname(exe), "python.exe"),
-              os.path.join(sys.prefix, "python.exe"),
-              os.path.join(sys.prefix, "bin", "python.exe")):
-        if os.path.isfile(c):
-            return c
-    return "python"
+    """Give a runnable Python interpreter associated with KiCad.
 
-
-def _solver_missing(exe):
-    """Give the modules that are necessary for runner.py and that `exe`
-    does not have.
-
-    The subprocess uses find_spec, which does not import the extensions.
-    Thus a missing openEMS DLL does not look like a missing package.
+    KiCad embeds Python on macOS, so ``sys.executable`` may be the pcbnew
+    application rather than a Python executable.  Its ``sys.prefix`` still
+    points at the bundled framework, whose ``bin/python3`` can run probes.
     """
-    code = ("import importlib.util as u\n"
-            "print(','.join(m for m in ('numpy', 'h5py', 'CSXCAD', 'openEMS')\n"
-            "               if u.find_spec(m) is None))")
+    exe = sys.executable or ""
+    if (os.path.basename(exe).lower().startswith("python")
+            and os.path.isfile(exe)):
+        return exe
+    for base in (sys.prefix, getattr(sys, "base_prefix", "")):
+        for name in ("python3", "python", "python.exe"):
+            c = os.path.join(base, "bin", name)
+            if os.path.isfile(c) and os.access(c, os.X_OK):
+                return c
+            c = os.path.join(base, name)
+            if os.path.isfile(c) and os.access(c, os.X_OK):
+                return c
+    for name in ("python3", "python"):
+        c = shutil.which(name)
+        if c:
+            return c
+    # Keep the error from _solver_missing actionable if a very unusual
+    # embedded Python has no discoverable sibling interpreter.
+    return "python3" if os.name != "nt" else "python"
+
+
+def _solver_probe_code():
+    """Return the probe run in the solver interpreter.
+
+    ``find_spec`` alone reports a native extension as present even when its
+    dylib dependency cannot be loaded.  Importing each module catches that
+    failure and lets the GUI show the real diagnostic.
+    """
+    return (
+        "import importlib, json\n"
+        "mods = ('numpy', 'h5py', 'CSXCAD', 'openEMS')\n"
+        "out = {}\n"
+        "for m in mods:\n"
+        "    try:\n"
+        "        importlib.import_module(m)\n"
+        "        out[m] = None\n"
+        "    except Exception as e:\n"
+        "        out[m] = '%s: %s' % (type(e).__name__, e)\n"
+        "print(json.dumps(out))\n"
+    )
+
+
+def _solver_missing(exe, env=None):
+    """Give solver modules that are missing or fail native loading."""
+    code = _solver_probe_code()
     try:
         r = subprocess.run([exe, "-c", code], capture_output=True, text=True,
-                           timeout=60, creationflags=NO_WINDOW)
+                           timeout=60, creationflags=NO_WINDOW,
+                           env=env or solverenv.runtime_env())
     except Exception as e:
         return ["(cannot run %s: %s)" % (exe, e)]
     if r.returncode != 0:
-        return ["(probe failed: %s)" % (r.stderr or "").strip()[-200:]]
-    return [m for m in r.stdout.strip().split(",") if m]
+        return ["(probe failed: %s)" % (r.stderr or "").strip()[-500:]]
+    try:
+        result = json.loads(r.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return ["(probe returned invalid output: %s)" % r.stdout.strip()[-500:]]
+    return [m if reason is None else "%s (%s)" % (m, reason)
+            for m, reason in result.items() if reason is not None]
 
 
 class RFSimPlugin(pcbnew.ActionPlugin):
@@ -72,9 +108,10 @@ class RFSimPlugin(pcbnew.ActionPlugin):
         # cp311 wheel. Thus the code examines the two sets of packages one
         # after the other.
         solver_py = solverenv.solver_python() or _kicad_python()
+        solver_env = solverenv.runtime_env()
         gui_missing = [m for m in ("skrf", "matplotlib", "h5py")
                        if importlib.util.find_spec(m) is None]
-        solver_missing = _solver_missing(solver_py)
+        solver_missing = _solver_missing(solver_py, solver_env)
         if gui_missing or solver_missing:
             msg = []
             if gui_missing:

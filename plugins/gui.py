@@ -2002,7 +2002,8 @@ class RunDialog(wx.Dialog):
         flags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                      stderr=subprocess.STDOUT,
-                                     creationflags=flags)
+                                     creationflags=flags,
+                                     env=solverenv.runtime_env())
         self.Bind(wx.EVT_BUTTON, self._on_cancel, id=wx.ID_CANCEL)
         threading.Thread(target=self._pump, daemon=True).start()
 

@@ -1,0 +1,20 @@
+name: macOS compatibility
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  platform-tests:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run platform tests
+        run: python -m unittest discover -s tests -v
+      - name: Compile Python sources
+        run: python -m py_compile plugins/*.py scripts/*.py tests/*.py
+      - name: Validate shell scripts
+        run: bash -n scripts/install_macos.sh scripts/package_macos.sh

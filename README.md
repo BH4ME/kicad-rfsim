@@ -20,7 +20,49 @@ The geometry goes from the native board objects of KiCad to the primitives of CS
 
 ## Installation
 
-1) Download the [latest release ZIP file](https://github.com/NBalciunas/kicad-rfsim/releases).
+### macOS (KiCad 10)
+
+The macOS package is validated on Apple Silicon with the universal KiCad 10
+Python framework. The plugin code also avoids architecture-specific paths, so
+Intel Macs can use the same setup after compiling an x86_64 solver. The
+official openEMS releases currently publish Windows binaries only, so a
+complete macOS install builds openEMS and CSXCAD
+from the upstream source. The repository includes an installer that copies
+the plugin to KiCad's documented ActionPlugin directory and installs versions
+of the GUI dependencies compatible with KiCad's Python 3.9:
+
+```sh
+RFSIM_INSTALL_OPENEMS=source scripts/install_macos.sh
+```
+
+The source build uses the upstream `update_openEMS.sh --disable-GUI --python`
+workflow (the RFsim plugin does not need the optional AppCSXCAD GUI) and
+installs under `~/.local/share/rfsim/openEMS`. It may take a while and requires
+Homebrew, Git and a working compiler. To only install/update the plugin and
+Python GUI packages, use `RFSIM_INSTALL_OPENEMS=none` (the default). You can
+also use an existing solver with:
+
+```sh
+export OPENEMS_PATH="$HOME/opt/openEMS"
+export RFSIM_PYTHON="$HOME/opt/openEMS/venv/bin/python3"
+scripts/diagnose_macos.py
+```
+
+The diagnostic must report successful imports for `numpy`, `h5py`, `CSXCAD`
+and `openEMS`, plus a successful `series_rlc_api` check for full inductor and
+Series RLC support. The optional `RFSIM_INSTALL_OPENEMS=brew` mode uses the
+third-party [vinn-ie Homebrew tap](https://github.com/vinn-ie/homebrew-openems);
+its current openEMS 0.0.36 build does not provide the newer lumped-element
+API needed for inductors and Series RLC, so source mode is recommended for
+the full feature set.
+
+The installer targets `~/Documents/KiCad/10.0/scripting/plugins/rfsim`. You
+can override it with `KICAD_PLUGIN_DIR`, and override the bundled Python with
+`KICAD_PYTHON`. Restart KiCad after installation.
+
+### Windows (KiCad 10)
+
+1) Download the [latest release ZIP file](https://github.com/BH4ME/kicad-rfsim/releases).
 2) Open KiCad and in the main window click on "Plugin and Content Manager".
 3) Click "Install from File..." and select the downloaded ZIP file.
 4) Install `scikit-rf`, `matplotlib` and `h5py` into the Python of KiCad:
@@ -29,13 +71,11 @@ The geometry goes from the native board objects of KiCad to the primitives of CS
    "C:\Program Files\KiCad\10.0\bin\python.exe" -m pip install --user scikit-rf matplotlib h5py
    ```
 
-   > If KiCad is installed for one user only, its Python is in `%LOCALAPPDATA%\Programs\KiCad\10.0\bin`.
-
 5) Install openEMS. Download the newest `openEMS_x64_v*_msvc.zip` from the [openEMS releases](https://github.com/thliebig/openEMS-Project/releases). Extract the `openEMS` folder to `C:\openEMS`.
 
    > For a different folder, set the `OPENEMS_PATH` environment variable.
 
-6) Install [Python 3.14](https://www.python.org/downloads/), then make the venv of the solver:
+6) Install Python 3.14 and make the solver venv:
 
    ```bat
    py -3.14 -m venv C:\openEMS\venv
@@ -183,7 +223,16 @@ The 3D radiation pattern, which you can rotate:
 
 ## Validation
 
-The `validation/` folder makes its own test boards, runs the solver and compares the result against closed-form theory. Run the files with the Python of KiCad, and the files marked "solver Python" with `C:\openEMS\venv\Scripts\python.exe`:
+The `validation/` folder makes its own test boards, runs the solver and compares the result against closed-form theory. On macOS, use the bundled KiCad Python for files that import `pcbnew`, and the openEMS venv for solver-only files:
+
+```sh
+KIPY="/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3.9"
+SOLVER="${RFSIM_PYTHON:-$HOME/.local/share/rfsim/openEMS/venv/bin/python3}"
+"$KIPY" validation/run_headless.py coarse
+"$SOLVER" validation/test_touchstone.py
+```
+
+On Windows, use the KiCad Python and `C:\openEMS\venv\Scripts\python.exe` as before:
 
 ```bat
 set KIPY="C:\Program Files\KiCad\10.0\bin\python.exe"

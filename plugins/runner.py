@@ -41,6 +41,10 @@ warnings.showwarning = _show_warning
 
 import solverenv  # the directory of this file is sys.path[0] for a script
 
+# A KiCad app launched from Finder does not inherit a shell's Homebrew
+# library paths.  Prepare the environment before importing native modules.
+os.environ.update(solverenv.runtime_env())
+
 # On Windows, the python extensions of openEMS and CSXCAD must have the
 # DLLs from the binary directory of openEMS. (openEMS v0.37 and after also
 # give a CSXCAD_INSTALL_PATH environment variable, but add_dll_directory is
@@ -1558,13 +1562,17 @@ def build(model, excite_idx, res, want_ff=False, quiet=False):
         from CSXCAD import ContinuousStructure
         from openEMS import openEMS
     except ImportError as e:
-        if "Application Control policy" not in str(e):
-            raise
+        if "Application Control policy" in str(e):
+            raise SystemExit(
+                "[rfsim] ERROR: Windows Smart App Control stopped the "
+                "openEMS libraries, because they have no signature. To "
+                "correct this, open Windows Security > App & browser "
+                "control, and set Smart App Control to Off.")
         raise SystemExit(
-            "[rfsim] ERROR: Windows Smart App Control stopped the "
-            "openEMS libraries, because they have no signature. To "
-            "correct this, open Windows Security > App & browser "
-            "control, and set Smart App Control to Off.")
+            "[rfsim] ERROR: could not load CSXCAD/openEMS: %s\n"
+            "Set OPENEMS_PATH, CSXCAD_INSTALL_PATH and RFSIM_PYTHON, "
+            "then verify the native libraries are on the platform library "
+            "path." % e)
 
     s = model["settings"]
     f0 = 0.5 * (s["f_start"] + s["f_stop"])
